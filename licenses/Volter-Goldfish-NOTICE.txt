@@ -1,0 +1,40 @@
+Volter (Goldfish) Third-Party Font Notice
+
+Included filenames:
+  Volter.ttf
+  Volter-Bold.ttf
+
+Common upstream filename:
+  Volter__28Goldfish_29.ttf
+
+Designer attribution shown by public font directories:
+  cocoFabien
+
+Public classification shown by those directories:
+  100% Free; commercial use allowed
+
+Volter (Goldfish) is third-party font software. It is not authored, owned,
+sublicensed, or relicensed by Truffle Text, and it is not covered by Truffle's
+MIT License.
+
+The original font package located during development did not include a
+detailed standalone licence agreement or EULA specifying redistribution,
+modification, embedding, sublicensing, or derivative-work terms. At least one
+public directory that classifies the font as 100% Free also reports that no
+licence was found.
+
+The font files are included unmodified based on the available public
+classification. No ownership or additional licensing rights are claimed.
+This notice records the available attribution and uncertainty; it is not a
+substitute for permission from the font's copyright holder.
+
+Users and redistributors should independently confirm the applicable terms
+with the original copyright holder.
+
+Truffle Text is not affiliated with or endorsed by cocoFabien, Sulake, Habbo,
+or Habbo Hotel. Habbo, Habbo Hotel, Sulake, and associated logos are
+trademarks of their respective owners.
+
+Reference listings consulted during packaging:
+  https://www.dafont.com/cocofabien.d1228
+  https://www.fontzillion.com/fonts/cocofabien/volter-goldfish

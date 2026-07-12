@@ -1,0 +1,60 @@
+{
+  "name": "truffle-text",
+  "version": "1.0.0",
+  "description": "Exact calibrated HTML canvas text rendering with confirmed Habbo style presets.",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/index.d.ts",
+      "import": "./src/index.js"
+    },
+    "./packed": {
+      "types": "./src/packed.d.ts",
+      "import": "./src/packed.js"
+    },
+    "./react": {
+      "types": "./src/react.d.ts",
+      "import": "./src/react.js"
+    }
+  },
+  "bin": {
+    "truffle-setup": "./bin/setup.mjs"
+  },
+  "files": [
+    "bin/**/*.mjs",
+    "payload/**/*",
+    "src/**/*.js",
+    "src/**/*.d.ts",
+    "README.md",
+    "PUBLISHING.md",
+    "LICENSE",
+    "licenses/**/*",
+    "THIRD_PARTY_NOTICES.md"
+  ],
+  "scripts": {
+    "verify": "node ./bin/verify-package.mjs",
+    "prepublishOnly": "npm run verify"
+  },
+  "peerDependencies": {
+    "react": ">=18"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    }
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "sideEffects": false,
+  "keywords": [
+    "truffle",
+    "html",
+    "canvas",
+    "text-rendering",
+    "flashtype",
+    "habbo",
+    "pixel-perfect"
+  ],
+  "license": "MIT"
+}
