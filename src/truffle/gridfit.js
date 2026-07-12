@@ -3,13 +3,13 @@
  *
  * Reimplements FlashType's behavior for antiAliasType=ADVANCED +
  * gridFitType=PIXEL, reverse-engineered from AIR getCharBoundaries dumps and
- * per-pixel stem cross-sections of AIR-baked PNGs (see docs/FINDINGS.md):
+ * per-pixel stem cross-sections of AIR-baked PNGs
  *
  *  1. The glyph is hinted ONCE in its own coordinate space (x-phase
  *     independent) and the raster is stamped at floor(pen).
  *  2. Vertical alignment zones (stems AND curve extrema) snap to the pixel
  *     grid with a rightward bias: zone' = round(zone + zoneBias), zoneBias≈0.6.
- *     Subsequent zones keep their rounded distance to the first zone
+ *     zones keep their rounded distance to the first zone
  *     ("characteristic spacing": n's stems land 4px apart, raw 3.59).
  *  3. Stem widths round to integers (min 1px) with a small sub-twip bloat
  *     (AIR stems measure ≈[x+0.02, x+1.07]).
