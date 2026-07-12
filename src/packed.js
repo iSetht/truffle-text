@@ -1,10 +1,22 @@
 /**
  * packed.js — Runtime loader for the shippable `dist/` payload.
  *
- * This is the production entry point. It loads the binary raster calibration
- * chunks (.tfc) produced by `tools/pack-calibration.mjs`
+ * This is the production entry point. It loads the binary raster-calibration
+ * chunks (.tfc) produced by `tools/pack-calibration.mjs` instead of the
+ * 362 MB development JSON, decoding them into typed-array structures that are
+ * semantically identical to the JSON (verified by tests/packed.test.mjs).
  * The certified layout/render code is untouched; this changes the CONTAINER,
  * never the calibration data.
+ *
+ * Browser:
+ *   import { loadPackedTruffle } from './src/packed.js';
+ *   const truffle = await loadPackedTruffle({ base: '/dist' });            // everything
+ *   const truffle = await loadPackedTruffle({ base: '/dist',
+ *     styles: ['u_chat_speak', 'u_chat_shout', 'il_regular'] });           // lazy subset
+ *   truffle.drawText(ctx, 'hello', { x: 8, y: 8, style: 'u_chat_speak' });
+ *   await truffle.ensureStyles(['il_button']);                             // add later
+ *
+ * Node: identical API; `base` may be a filesystem path.
  */
 
 import {

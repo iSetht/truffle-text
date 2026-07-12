@@ -18,7 +18,7 @@
     }
   },
   "bin": {
-    "truffle-setup": "./bin/setup.mjs"
+    "truffle-setup": "bin/setup.mjs"
   },
   "files": [
     "bin/**/*.mjs",

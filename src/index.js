@@ -1,5 +1,10 @@
 /**
  * index.js — Public browser/Node API for the Truffle renderer replica.
+ *
+ * Browser usage:
+ *   import { TruffleText } from './src/index.js';
+ *   const truffle = await TruffleText.load();
+ *   truffle.drawText(ctx, 'Hello', { x: 10, y: 10, style: 'il_regular', color: 0x000000 });
  */
 
 import { FlashFont } from './font/flashfont.js';
@@ -29,7 +34,7 @@ function volter({ bold = false, italic = false, color = 0x000000, size = 9 } = {
   };
 }
 
-/** The 67 selectors from Habbo's styles.css, in source order. */
+/** The 67 selectors from Habbo's decompiled primary styles.css, in source order. */
 const HABBO_CSS_STYLES = {
   u_regular: ubuntu(12),
   u_bold: ubuntu(12, { bold: true }),
@@ -103,7 +108,7 @@ const HABBO_CSS_STYLES = {
   tag: volter(),
 };
 
-/** Selector names present in Habbo's CSS asset. */
+/** Canonical selector names present in Habbo's CSS asset. */
 export const HABBO_CSS_STYLE_NAMES = Object.freeze(Object.keys(HABBO_CSS_STYLES));
 
 /** All 67 public named styles */
@@ -244,5 +249,5 @@ export class TruffleText {
 }
 
 export { FlashFont, FontRegistry, TextLayout, TextRenderer, GUTTER, DEFAULT_FIT };
-// Exported for the packed-payload loader (src/packed.js);
+// Exported for the packed-payload loader (src/packed.js); no behavior change.
 export { FONT_FILES, styleDefaults };
