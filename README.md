@@ -76,6 +76,11 @@ Use names from `HABBO_CSS_STYLE_NAMES` or inspect `HABBO_STYLES`. Confirmed
 styles should be treated as read-only presets. Changing their sizes or render
 settings leaves the certified output surface and may look blurry.
 
+## Playground
+
+Try every included style in the browser at
+[isetht.github.io/truffle-text/test](https://isetht.github.io/truffle-text/test/).
+
 ## Licensing
 
 Truffle's original code is available under the MIT License. Bundled fonts are
