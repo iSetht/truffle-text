@@ -111,7 +111,7 @@ const HABBO_CSS_STYLES = {
 /** Canonical selector names present in Habbo's CSS asset. */
 export const HABBO_CSS_STYLE_NAMES = Object.freeze(Object.keys(HABBO_CSS_STYLES));
 
-/** All 67 public named styles */
+/** All 67 public named styles. */
 export const HABBO_STYLES = Object.freeze({
   ...HABBO_CSS_STYLES,
 });

@@ -1,7 +1,7 @@
 {
  "format": "truffle-dist",
  "version": 1,
- "generated": "2026-07-12T05:29:18.342Z",
+ "generated": "2026-07-13T14:47:01.604Z",
  "raster": {
   "Ubuntu|true|false|24|16777215|advanced|pixel|0|0": {
    "file": "raster/00-ubuntu_true_false_24_16777215_advanced_pixel_0_0.tfc",
@@ -177,20 +177,55 @@
    "file": "raster/34-volter_false_false_9_16777215_normal_none_0_0.tfc",
    "bytes": 442195,
    "chars": 180
+  },
+  "Volter Bold|true|false|9|0|advanced|pixel|0|0": {
+   "file": "raster/35-volter_bold_true_false_9_0_advanced_pixel_0_0.tfc",
+   "bytes": 210741,
+   "chars": 84
+  },
+  "Volter Bold|true|true|9|0|advanced|pixel|0|0": {
+   "file": "raster/36-volter_bold_true_true_9_0_advanced_pixel_0_0.tfc",
+   "bytes": 545659,
+   "chars": 84
+  },
+  "Volter Bold|true|false|9|16777215|advanced|pixel|0|0": {
+   "file": "raster/37-volter_bold_true_false_9_16777215_advanced_pixel_0_0.tfc",
+   "bytes": 368427,
+   "chars": 84
+  },
+  "Volter Bold|true|false|18|0|advanced|pixel|0|0": {
+   "file": "raster/38-volter_bold_true_false_18_0_advanced_pixel_0_0.tfc",
+   "bytes": 719788,
+   "chars": 84
+  },
+  "Volter|false|true|9|0|advanced|pixel|0|0": {
+   "file": "raster/39-volter_false_true_9_0_advanced_pixel_0_0.tfc",
+   "bytes": 482228,
+   "chars": 84
+  },
+  "Volter|false|false|9|0|advanced|pixel|0|0": {
+   "file": "raster/40-volter_false_false_9_0_advanced_pixel_0_0.tfc",
+   "bytes": 174506,
+   "chars": 84
+  },
+  "Volter|false|false|9|16777215|advanced|pixel|0|0": {
+   "file": "raster/41-volter_false_false_9_16777215_advanced_pixel_0_0.tfc",
+   "bytes": 308380,
+   "chars": 84
   }
  },
  "data": {
   "calibration": {
    "file": "data/calibration.json",
-   "bytes": 9078900
+   "bytes": 9561473
   },
   "color-calibration": {
    "file": "data/color-calibration.json",
-   "bytes": 13357303
+   "bytes": 14030209
   },
   "composite-calibration": {
    "file": "data/composite-calibration.json",
-   "bytes": 26214071
+   "bytes": 27003531
   }
  },
  "fonts": [
