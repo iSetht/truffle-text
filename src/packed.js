@@ -107,7 +107,9 @@ function styleSignatureCandidates(style) {
   const legacyBaseKey = `${s.fontFamily}|${!!s.bold}|${s.size}`;
   const csm = `${s.antiAliasType}|${s.gridFitType}|${s.sharpness}|${s.thickness}`;
   const candidates = [];
-  for (const color of [s.color ?? 0, 16777215]) {
+  // Dynamic colors fall back to the certified black mask; white and #EEEEEE
+  // retain their own exact FlashType calibration when the manifest has it.
+  for (const color of [...new Set([s.color ?? 0, 0x000000, 0xEEEEEE, 0xFFFFFF])]) {
     candidates.push(
       `${baseKey}|${color}|${csm}`, // rasterKey / whiteRasterKey
       `${baseKey}|${color}`,        // colorKey fallback

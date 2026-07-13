@@ -27,7 +27,7 @@ export class TextRenderer {
     const phX = Math.round(((penX % 1) + 1) % 1 * 20) % 20;
     const phY = Math.round(((baseYUp % 1) + 1) % 1 * 20) % 20;
     const contextPhase = calibrated?.contexts?.[runKey]?.[String(phX)] ?? null;
-    const key = `${s.fontFamily}|${!!s.bold}|${!!s.italic}|${s.size}|${s.color ?? 0}|${cp}|${phX}|${phY}|${pass}|${contextPhase ? runKey : ''}|${allowExteriorFringe}`;
+    const key = `${s.fontFamily}|${!!s.bold}|${!!s.italic}|${s.size}|${s.calibrationColor ?? s.color ?? 0}|${cp}|${phX}|${phY}|${pass}|${contextPhase ? runKey : ''}|${allowExteriorFringe}`;
     let r = this.cache.get(key);
     if (!r) {
       if (calibrated) {
@@ -113,6 +113,7 @@ export class TextRenderer {
         const style = {
           ...this.layout.style,
           color: et.color,
+          calibrationColor: et.color,
           calibration: this.layout.style.etchCalibration,
           rasterCalibration: this.layout.style.etchRasterCalibration,
         };
@@ -129,7 +130,8 @@ export class TextRenderer {
     // BitmapData stores 8-bit premultiplied channels internally. Keeping that
     // representation until export is required for exact etched edge pixels.
     const premul = new Uint8ClampedArray(W * H * 4);
-    const compositeStyleKey = `${this.layout.style.fontFamily}|${!!this.layout.style.bold}|${!!this.layout.style.italic}|${this.layout.style.size}|${this.layout.style.color ?? 0}|${this.layout.style.antiAliasType}|${this.layout.style.gridFitType}|${this.layout.style.sharpness}|${this.layout.style.thickness}`;
+    const compositeColor = this.layout.style.calibrationColor ?? this.layout.style.color ?? 0;
+    const compositeStyleKey = `${this.layout.style.fontFamily}|${!!this.layout.style.bold}|${!!this.layout.style.italic}|${this.layout.style.size}|${compositeColor}|${this.layout.style.antiAliasType}|${this.layout.style.gridFitType}|${this.layout.style.sharpness}|${this.layout.style.thickness}`;
     const compositeOutputKey = `${compositeStyleKey}|${!!this.layout.style.underline}`;
 
     const rasterLayer = (dx, dy, pass, passLay, passEngine) => {
@@ -313,7 +315,7 @@ export class TextRenderer {
           this.layout.style.compositeCellUsage.add(compositeCellKey);
         }
         const output = cellOutput ?? fallbackOutput;
-        if (output) {
+        if (output && (opts.color ?? 0x000000) === compositeColor) {
           img.data[o] = output[0]; img.data[o + 1] = output[1];
           img.data[o + 2] = output[2]; img.data[o + 3] = output[3];
         } else if (calibratedUnetched) {

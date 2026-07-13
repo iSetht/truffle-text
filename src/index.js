@@ -182,12 +182,31 @@ export class TruffleText {
     const s = { ...styleDefaults(named.fontFamily), ...named };
     const baseKey = `${s.fontFamily}|${!!s.bold}|${!!s.italic}|${s.size}`;
     const legacyBaseKey = `${s.fontFamily}|${!!s.bold}|${s.size}`;
-    const colorKey = `${baseKey}|${s.color ?? 0}`;
-    const legacyColorKey = `${legacyBaseKey}|${s.color ?? 0}`;
+    const requestedColor = s.color ?? 0;
+    const colorKeyFor = color => `${baseKey}|${color}`;
+    const legacyColorKeyFor = color => `${legacyBaseKey}|${color}`;
+    const rasterKeyFor = color => `${colorKeyFor(color)}|${s.antiAliasType}|${s.gridFitType}|${s.sharpness}|${s.thickness}`;
+    const rasterFor = color => this.rasterCalibration[rasterKeyFor(color)] ??
+      this.rasterCalibration[colorKeyFor(color)] ??
+      this.rasterCalibration[legacyColorKeyFor(color)] ?? null;
+    const calibrationFor = color => this.colorCalibration[colorKeyFor(color)] ??
+      this.colorCalibration[legacyColorKeyFor(color)] ?? null;
+
+    // FlashType's calibrated black mask is also AIR's exact mask for ordinary
+    // dynamic colors (for example Habbo's #DD0000 inventory heading). Never
+    // drop to the geometric raster merely because that RGB value was not in
+    // the certification corpus. Preserve exact white/#EEEEEE entries when
+    // requested, otherwise prefer black and only then another available mask.
+    const fallbackColors = [...new Set([requestedColor, 0x000000, 0xEEEEEE, 0xFFFFFF])];
+    const calibrationColor = fallbackColors.find(color => rasterFor(color)) ??
+      fallbackColors.find(color => calibrationFor(color)) ?? requestedColor;
+    const colorKey = colorKeyFor(calibrationColor);
+    const legacyColorKey = legacyColorKeyFor(calibrationColor);
     const whiteKey = `${baseKey}|16777215`;
     const legacyWhiteKey = `${legacyBaseKey}|16777215`;
-    const rasterKey = `${colorKey}|${s.antiAliasType}|${s.gridFitType}|${s.sharpness}|${s.thickness}`;
+    const rasterKey = rasterKeyFor(calibrationColor);
     const whiteRasterKey = `${whiteKey}|${s.antiAliasType}|${s.gridFitType}|${s.sharpness}|${s.thickness}`;
+    s.calibrationColor = calibrationColor;
     s.calibration = this.colorCalibration[colorKey] ?? this.colorCalibration[legacyColorKey] ??
       this.calibration[baseKey] ?? this.calibration[legacyBaseKey] ?? null;
     s.rasterCalibration = this.rasterCalibration[rasterKey] ??
