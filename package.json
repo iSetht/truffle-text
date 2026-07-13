@@ -1,6 +1,6 @@
 {
   "name": "truffle-text",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Exact calibrated HTML canvas text rendering with confirmed Habbo style presets.",
   "type": "module",
   "exports": {
