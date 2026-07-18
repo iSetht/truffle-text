@@ -311,11 +311,11 @@ export class TextLayout {
         const nextCp = nextCpForRun;
         const step = this.advancedPixel
           ? this.fittedStep(cp, penX, nextCp, runKey, deepKey, prefixKey) : { jump: 0, inkShift: 0, calibratedInkShift: 0, inkDy: 0 };
-        let autoClipLeft = null;
-        const stableAuto = this.style.fidelity === 'auto' &&
+        const autoCollisionGuard = this.style.fidelity === 'auto' &&
           this.style.autoRasterPolicy === 'stable' && this.advancedPixel &&
           !Number.isFinite(wrapW);
-        if (stableAuto && previous && !this._flat(previous.cp).outline.empty &&
+        if (autoCollisionGuard && previous && previous.cp !== cp &&
+          !this._flat(previous.cp).outline.empty &&
           !this._flat(cp).outline.empty) {
           const previousBounds = this._stableRasterBounds(previous.cp);
           const currentBounds = this._stableRasterBounds(cp);
@@ -327,21 +327,18 @@ export class TextLayout {
             let strongGap = currentOrigin + currentBounds.strong.left -
               (previousOrigin + previousBounds.strong.right);
             if (strongGap < 2) {
+              // Move the current glyph/caret together. Never crop either
+              // raster: slicing the facing fringe damaged legitimate a/d/b
+              // strokes in ordinary freeform strings.
               const opticalShift = Math.min(3, 2 - strongGap);
               previous.advance = roundTwip(previous.advance + opticalShift);
               penX = roundTwip(penX + opticalShift);
               currentOrigin += opticalShift;
               strongGap += opticalShift;
             }
-            const anyGap = currentOrigin + currentBounds.any.left -
-              (previousOrigin + previousBounds.any.right);
-            if (strongGap >= 2 && anyGap < 2) {
-              previous.autoClipRight = previousBounds.strong.right;
-              autoClipLeft = currentBounds.strong.left;
-            }
           }
         }
-        line.chars.push({ cp, i: charIndex + k, penX, advance: adv, jump: step.jump, inkShift: step.inkShift, calibratedInkShift: step.calibratedInkShift, inkDy: step.inkDy, runIndex, runLeader, runKey, rasterKey: prefixKey, autoClipLeft });
+        line.chars.push({ cp, i: charIndex + k, penX, advance: adv, jump: step.jump, inkShift: step.inkShift, calibratedInkShift: step.calibratedInkShift, inkDy: step.inkDy, runIndex, runLeader, runKey, rasterKey: prefixKey });
         penX = roundTwip(penX + adv);
         if (WORD_DELIMS.test(para[k])) lastBreak = line.chars.length - 1;
       }

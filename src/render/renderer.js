@@ -54,17 +54,18 @@ export class TextRenderer {
     // base entry and select only the phase-specific pixel-state arrays.
     const phX = Math.round(((penX % 1) + 1) % 1 * 20) % 20;
     const phY = Math.round(((baseYUp % 1) + 1) % 1 * 20) % 20;
-    // Exact replay uses every observed AIR phase/context state. Auto mode is
-    // the product-safe path: advanced+pixel glyphs were hinted once in glyph
-    // space, so borrowing a phase/context state from a different baked string
-    // can create the reported random terminal-J pixel. Use the calibrated base
-    // mask in auto and keep phase/context replay exclusively for exact mode.
-    const stableAuto = s.fidelity === 'auto' && s.autoRasterPolicy === 'stable' &&
+    // Default auto replays AIR phase/context data just like exact whenever the
+    // full signature is calibrated. Only the interior of a repeated-glyph run
+    // uses the context-free AIR mask: captured terminal state otherwise makes
+    // pixels appear/disappear when the run length changes. A caller may also
+    // request that stable policy for the complete input explicitly.
+    const stableAuto = s.fidelity === 'auto' &&
+      (s.autoRasterPolicy === 'stable' || repeatedRunIndex(runKey) > 0) &&
       s.antiAliasType !== 'normal' && s.gridFitType === 'pixel';
     const contextPhase = stableAuto
       ? null
       : calibrated?.contexts?.[runKey]?.[String(phX)] ?? null;
-    const key = `${s.fontFamily}|${!!s.bold}|${!!s.italic}|${s.size}|${s.calibrationColor ?? s.color ?? 0}|${cp}|${phX}|${phY}|${pass}|${contextPhase ? runKey : ''}|${allowExteriorFringe}`;
+    const key = `${s.fontFamily}|${!!s.bold}|${!!s.italic}|${s.size}|${s.calibrationColor ?? s.color ?? 0}|${cp}|${phX}|${phY}|${pass}|${stableAuto ? 'stable' : contextPhase ? runKey : ''}|${allowExteriorFringe}`;
     let r = this.cache.get(key);
     if (!r) {
       if (calibrated) {
@@ -126,7 +127,11 @@ export class TextRenderer {
     // hinted zones sit that many px right of our geometric hint.
     return {
       r,
-      intX: Math.floor(penX) + jump + (calibrated ? (contextPhase ? 0 : calibratedInkShift) : inkShift),
+      // Context-free auto masks were solved at the calibrated anchor itself;
+      // applying a context-only ink correction to them shifts narrow repeated
+      // glyphs by as much as two pixels.
+      intX: Math.floor(penX) + jump +
+        (calibrated ? (contextPhase || stableAuto ? 0 : calibratedInkShift) : inkShift),
       negIntY: -Math.floor(baseYUp) + (calibrated ? 0 : inkDy),
     };
   }
@@ -252,9 +257,6 @@ export class TextRenderer {
             for (let rx = 0; rx < r.w; rx++) {
               const px = gx + rx;
               if (px < 0 || px >= W) continue;
-              const rasterX = r.x0 + rx;
-              if ((c.autoClipLeft != null && rasterX < c.autoClipLeft) ||
-                (c.autoClipRight != null && rasterX > c.autoClipRight)) continue;
               const sourceIndex = ry * r.w + rx;
               const sourceAlpha = r.alpha[sourceIndex];
               const sourceCoverage = pass === 'main'
@@ -401,6 +403,19 @@ export class TextRenderer {
     }
 
     return { ...img, layout: lay };
+  }
+}
+
+function repeatedRunIndex(contextKey) {
+  if (!contextKey) return 0;
+  try {
+    const parts = JSON.parse(contextKey);
+    if (!Array.isArray(parts)) return 0;
+    // Layout raster keys contain [prefix, previous2, leader, runIndex, next].
+    // Direct run keys contain [leader, runIndex, next].
+    return Number(parts.length >= 5 ? parts[3] : parts[1]) || 0;
+  } catch {
+    return 0;
   }
 }
 

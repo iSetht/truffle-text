@@ -1,7 +1,7 @@
 {
  "format": "truffle-dist",
  "version": 1,
- "generated": "2026-07-18T04:13:44.282Z",
+ "generated": "2026-07-18T05:58:41.747Z",
  "raster": {
   "Ubuntu|true|false|24|16777215|advanced|pixel|0|0": {
    "file": "raster/00-ubuntu_true_false_24_16777215_advanced_pixel_0_0.tfc",
@@ -212,20 +212,25 @@
    "file": "raster/41-volter_false_false_9_16777215_advanced_pixel_0_0.tfc",
    "bytes": 308380,
    "chars": 84
+  },
+  "Ubuntu|false|true|11|0|advanced|pixel|80|-15": {
+   "file": "raster/42-ubuntu_false_true_11_0_advanced_pixel_80_15.tfc",
+   "bytes": 1355606,
+   "chars": 180
   }
  },
  "data": {
   "calibration": {
    "file": "data/calibration.json",
-   "bytes": 9561473
+   "bytes": 10104507
   },
   "color-calibration": {
    "file": "data/color-calibration.json",
-   "bytes": 14030209
+   "bytes": 14573250
   },
   "composite-calibration": {
    "file": "data/composite-calibration.json",
-   "bytes": 27003531
+   "bytes": 27311806
   }
  },
  "fonts": [

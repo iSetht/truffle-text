@@ -1,6 +1,6 @@
 {
   "name": "truffle-text",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "Scalable deterministic HTML text rendering with certified Flash replay and rich outline rendering.",
   "type": "module",
   "exports": {

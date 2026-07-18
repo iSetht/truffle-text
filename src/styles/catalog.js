@@ -16,9 +16,6 @@ function ubuntu(size, { bold = false, italic = false, color = 0x000000,
   return {
     fontFamily, size, bold, italic, antiAliasType: 'advanced',
     gridFitType: 'pixel', sharpness, thickness, kerning: true, color,
-    // Named Ubuntu UI styles prefer the context-free calibrated base mask in
-    // auto mode. Exact mode still replays all observed AIR phase/context data.
-    autoRasterPolicy: 'stable',
     ...(etching ? { etching } : {}),
     // Named link presets preserve their certified AIR row. Underlines added
     // dynamically use the product-wide one-pixel breathing room below.
@@ -183,7 +180,7 @@ export function resolveStyleProperties(style, overrides = {}) {
       result.lineDescent = preset.lineDescent * result.size / preset.size;
     }
     if (preset.italicRightOverhang !== undefined && normalizedOverrides.italicRightOverhang === undefined) {
-      result.italicRightOverhang = preset.italicRightOverhang * result.size / preset.size;
+      result.italicRightOverhang = italicOverhang(result.fontFamily, result.bold, result.size);
     }
   }
 
@@ -235,7 +232,12 @@ function resolveFaceFamily(family, bold, italic) {
 
 function italicOverhang(family, bold, size) {
   if (family === 'Volter' || family === 'Volter Bold') return 3.75 * size / 9;
-  if (family === 'Ubuntu') return (bold ? 4.55 : 4.65) * size / 12;
+  if (family === 'Ubuntu') {
+    // AIR TextField width keeps a measured 4.35px italic right allowance at
+    // Ubuntu regular 11px; it is not the pure 12px ratio (4.2625px).
+    if (!bold && size === 11) return 4.35;
+    return (bold ? 4.55 : 4.65) * size / 12;
+  }
   return 0;
 }
 
