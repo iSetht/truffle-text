@@ -25,6 +25,7 @@ export class FlashFont {
     this.name = name;
     this.ttf = parseTTF(ttfBuffer);
     this.em = this.ttf.unitsPerEm;
+    this._alignmentUnits = null;
   }
 
   /** Raw (unquantized) advance in logical px at `size`. */
@@ -52,6 +53,41 @@ export class FlashFont {
   }
 
   /**
+   * Face-wide horizontal alignment zones in logical pixels. TrueType's OS/2
+   * metrics are preferred; older fonts fall back to representative flat-top
+   * glyphs. The same zones are reused by every glyph at a requested size so
+   * curves may overshoot in the source outline without making a word bounce.
+   */
+  alignmentZones(size) {
+    if (!this._alignmentUnits) {
+      const os2 = this.ttf.os2;
+      const glyphTop = (cp) => {
+        const glyph = this.ttf.glyph(this.ttf.glyphIndex(cp));
+        return glyph?.contours?.length ? glyph.yMax : 0;
+      };
+      const xTop = glyphTop(0x78);
+      const capTop = glyphTop(0x48);
+      const trustedMetric = (metric, fallback) => {
+        if (!(fallback > 0)) return metric > 0 ? metric : 0;
+        return metric > 0 &&
+          Math.abs(metric - fallback) <= Math.max(this.em * 0.04, fallback * 0.08)
+          ? metric : fallback;
+      };
+      this._alignmentUnits = {
+        baseline: 0,
+        // Some embedded/converted faces carry stale OS/2 zone values. Trust
+        // them only when they agree with representative flat-top glyphs.
+        xHeight: trustedMetric(os2?.sxHeight, xTop),
+        capHeight: trustedMetric(os2?.sCapHeight, capTop),
+      };
+    }
+    const scale = size / this.em;
+    return Object.fromEntries(Object.entries(this._alignmentUnits)
+      .filter(([, value]) => Number.isFinite(value))
+      .map(([name, value]) => [name, value * scale]));
+  }
+
+  /**
    * Glyph outline in logical px at `size`, y-UP, origin at pen position on baseline.
    * Coordinates are quantized to the SWF twip grid first (DefineFont3 stores
    * integer twips in the 1024 em), matching what Flash actually rasterizes.
@@ -72,6 +108,7 @@ export class FlashFont {
       advance: this.ttf.advanceOf(gid) * s,
       lsb: this.ttf.lsbOf(gid) * s,
       xMin: g.xMin * s, xMax: g.xMax * s, yMin: g.yMin * s, yMax: g.yMax * s,
+      alignmentZones: this.alignmentZones(size),
       empty: g.contours.length === 0,
     };
   }

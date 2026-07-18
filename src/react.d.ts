@@ -13,3 +13,15 @@ export const TruffleCanvasText: FC<{
   title?: string;
   onReady?: (layout: TruffleLayout) => void;
 }>;
+
+export const TruffleRichText: FC<{
+  markup?: string;
+  baseStyle?: string | Record<string, unknown>;
+  color?: number;
+  width?: number;
+  wordWrap?: boolean;
+  className?: string;
+  title?: string;
+  ariaLabel?: string;
+  onReady?: (layout: TruffleLayout) => void;
+}>;

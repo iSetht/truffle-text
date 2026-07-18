@@ -35,7 +35,8 @@ export function rasterizeGlyph(outline, penX, baselineY, style, fitCfg = DEFAULT
     // its own space (x phase 0) and the raster is stamped at floor(pen) —
     // ink patterns of stem glyphs are identical at every pen phase. The y
     // phase (baseline subpixel position) does participate in hinting.
-    const fit = gridFitGlyph(flatPolys, 0, baselineY, outline.advance, style.size, fitCfg, profile);
+    const fit = gridFitGlyph(flatPolys, 0, baselineY, outline.advance, style.size,
+      fitCfg, profile, outline.alignmentZones);
     polys = fit.polys;
     advance = fit.advance;
   } else {
@@ -59,7 +60,19 @@ export function rasterizeGlyph(outline, penX, baselineY, style, fitCfg = DEFAULT
   const alpha = new Uint8ClampedArray(w * h);
 
   if (advanced) {
-    const csmTune = { ...TUNE, ...(profile?.csmTune ?? {}), ...(style.csmTune ?? {}) };
+    // Small bold Ubuntu fields with sharpness=0 are commonly produced by XML
+    // size overrides (for example u_headline_small at 12px). They have no
+    // certified raster row, and the generic 1.4px transition makes a hinted
+    // one-pixel stem mostly grey. Narrow only that geometric transition; a
+    // certified/auto replay never enters this tuning path.
+    const scalableTune = (style.fidelity === 'geometric' || style.certified === false) &&
+      style.fontFamily === 'Ubuntu' && !!style.bold && style.size <= 14 &&
+      (style.sharpness ?? 0) <= 0
+      ? { baseHalfWidth: 0.46 }
+      : null;
+    const csmTune = {
+      ...TUNE, ...scalableTune, ...(profile?.csmTune ?? {}), ...(style.csmTune ?? {}),
+    };
     const styleAlpha = resolveStyleAlphaTune(style);
     const p = csmParams(style.sharpness ?? 0, style.thickness ?? 0, csmTune);
     const maxD = Math.max(1.5, Math.abs(p.outsideCutoff) + 1);

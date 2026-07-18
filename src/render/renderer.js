@@ -9,29 +9,68 @@
 import { rasterizeGlyph } from './raster.js';
 import { resolveGlyphProfile } from '../truffle/gridfit.js';
 import { GUTTER, TextLayout } from '../layout/textfield.js';
+import { LRUCache } from '../cache/lru.js';
 
 export class TextRenderer {
   constructor(layoutEngine) {
     this.layout = layoutEngine; // TextLayout
-    this.cache = new Map();
+    this.cache = new LRUCache({
+      maxEntries: layoutEngine.style.glyphCacheEntries ?? 4096,
+      maxBytes: layoutEngine.style.glyphCacheBytes ?? 32 * 1024 * 1024,
+    });
     this.etchLayouts = new Map();
+    this._reportedFallbacks = new Set();
   }
 
   _glyphRaster(cp, penX, baseYUp, jump = 0, inkShift = 0, inkDy = 0, pass = 'main', layoutEngine = this.layout, calibratedInkShift = 0, runKey = '', allowExteriorFringe = false) {
     const s = layoutEngine.style;
-    const calibrated = s.rasterCalibration?.[String.fromCodePoint(cp)] ?? null;
+    const character = String.fromCodePoint(cp);
+    const availableCalibration = s.rasterCalibration?.[character] ?? null;
+    const calibrated = s.fidelity === 'geometric' ? null : availableCalibration;
+    if (!calibrated) {
+      // Spaces and other non-inking glyphs correctly have no raster entry.
+      // Their calibrated advance is handled by TextLayout, so exact replay
+      // must not reject them merely because there are no pixels to replay.
+      const emptyGlyph = layoutEngine._flat(cp).outline.empty;
+      if (s.fidelity === 'exact' && !emptyGlyph) {
+        throw new Error(`exact raster calibration is unavailable for ${character} ` +
+          `in ${s.fontFamily} ${s.size}px`);
+      }
+      const fallbackKey = `${cp}|raster`;
+      if (!emptyGlyph && !this._reportedFallbacks.has(fallbackKey)) {
+        this._reportedFallbacks.add(fallbackKey);
+        s._reportFallback?.({
+          stage: 'raster',
+          reason: s.fidelity === 'geometric' ? 'geometric-requested' : 'calibration-miss',
+          codePoint: cp,
+          character,
+          signature: `${s.fontFamily}|${!!s.bold}|${!!s.italic}|${s.size}|${s.antiAliasType}|${s.gridFitType}`,
+        });
+      }
+    }
     // cache by twip phase — grid fitting only depends on fractional position
     // AIR's advanced/pixel density state is phase-sensitive even though the
     // calibrated glyph cell geometry stays fixed. Keep x0/y0/w/h from the
     // base entry and select only the phase-specific pixel-state arrays.
     const phX = Math.round(((penX % 1) + 1) % 1 * 20) % 20;
     const phY = Math.round(((baseYUp % 1) + 1) % 1 * 20) % 20;
-    const contextPhase = calibrated?.contexts?.[runKey]?.[String(phX)] ?? null;
+    // Exact replay uses every observed AIR phase/context state. Auto mode is
+    // the product-safe path: advanced+pixel glyphs were hinted once in glyph
+    // space, so borrowing a phase/context state from a different baked string
+    // can create the reported random terminal-J pixel. Use the calibrated base
+    // mask in auto and keep phase/context replay exclusively for exact mode.
+    const stableAuto = s.fidelity === 'auto' && s.autoRasterPolicy === 'stable' &&
+      s.antiAliasType !== 'normal' && s.gridFitType === 'pixel';
+    const contextPhase = stableAuto
+      ? null
+      : calibrated?.contexts?.[runKey]?.[String(phX)] ?? null;
     const key = `${s.fontFamily}|${!!s.bold}|${!!s.italic}|${s.size}|${s.calibrationColor ?? s.color ?? 0}|${cp}|${phX}|${phY}|${pass}|${contextPhase ? runKey : ''}|${allowExteriorFringe}`;
     let r = this.cache.get(key);
     if (!r) {
       if (calibrated) {
-        const fallbackPhase = calibrated.phases?.[String(phX)] ?? calibrated;
+        const fallbackPhase = stableAuto
+          ? calibrated
+          : calibrated.phases?.[String(phX)] ?? calibrated;
         let geometricContext = null;
         if (contextPhase && s.antiAliasType === 'normal' && s.italic) {
           const { outline } = layoutEngine._flat(cp);
@@ -39,7 +78,7 @@ export class TextRenderer {
             fontFamily: s.fontFamily, bold: !!s.bold,
             antiAliasType: s.antiAliasType, gridFitType: s.gridFitType,
             sharpness: s.sharpness, thickness: s.thickness, size: s.size,
-            csmTune: s.csmTune,
+            csmTune: s.csmTune, pixelFont: s.pixelFont, fidelity: s.fidelity,
           }, layoutEngine.fitCfg, resolveGlyphProfile(s, cp));
         }
         const normalized = normalizeContextPhase(calibrated, contextPhase, fallbackPhase,
@@ -74,7 +113,7 @@ export class TextRenderer {
         fontFamily: s.fontFamily, bold: !!s.bold,
         antiAliasType: s.antiAliasType, gridFitType: s.gridFitType,
         sharpness: s.sharpness, thickness: s.thickness, size: s.size,
-        csmTune: s.csmTune,
+        csmTune: s.csmTune, pixelFont: s.pixelFont, fidelity: s.fidelity,
         }, layoutEngine.fitCfg, resolveGlyphProfile(s, cp));
       }
       this.cache.set(key, r);
@@ -213,6 +252,9 @@ export class TextRenderer {
             for (let rx = 0; rx < r.w; rx++) {
               const px = gx + rx;
               if (px < 0 || px >= W) continue;
+              const rasterX = r.x0 + rx;
+              if ((c.autoClipLeft != null && rasterX < c.autoClipLeft) ||
+                (c.autoClipRight != null && rasterX > c.autoClipRight)) continue;
               const sourceIndex = ry * r.w + rx;
               const sourceAlpha = r.alpha[sourceIndex];
               const sourceCoverage = pass === 'main'
@@ -260,7 +302,8 @@ export class TextRenderer {
             Math.floor(fractionalWidth * 4 + 0.5 + 1e-9)));
           const x0 = Math.floor(pad + GUTTER + dx + 1e-9);
           const x1 = Math.min(W, x0 + Math.ceil(lineWidth));
-          const py = Math.round(pad + line.baseline + dy) + (passEngine.style.underlineOffset ?? 0);
+          const py = Math.round(pad + line.baseline + dy) +
+            (passEngine.style.underlineOffset ?? 0) + (passEngine.style.underlineGap ?? 0);
           if (py < 0 || py >= H) continue;
           for (let px = Math.max(0, x0); px < x1; px++) {
             const quarters = fractionalWidth > 1e-9 && px === x0 + wholeWidth

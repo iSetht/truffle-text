@@ -1,8 +1,9 @@
 # Truffle Text
 
-Truffle is an exact calibrated HTML canvas text renderer. It includes the
-confirmed Habbo text-style names while keeping their calibrated sizes, weights,
-sharpness, thickness, and spacing unchanged.
+Truffle is a deterministic HTML canvas text renderer. Certified Habbo
+signatures replay exact calibrated Flash/AIR output, while the outline engine
+supports arbitrary sizes, runtime TrueType fonts, fallback chains, and mixed
+rich formatting without browser font rasterization.
 
 ## Install
 
@@ -30,6 +31,13 @@ truffle.drawText(context, 'Hello world!', {
   y: 0,
   style: 'u_chat_speak',
 });
+
+truffle.drawRichText(context, 'Hello <b>bold</b> and ' +
+  '<font size="18" color="#C62828">large red</font>', {
+  x: 0,
+  y: 24,
+  style: 'u_regular',
+});
 ```
 
 ## React or Nitro usage
@@ -37,7 +45,7 @@ truffle.drawText(context, 'Hello world!', {
 Preload once while the client starts:
 
 ```tsx
-import { preloadTruffle, TruffleCanvasText } from 'truffle-text/react';
+import { preloadTruffle, TruffleCanvasText, TruffleRichText } from 'truffle-text/react';
 
 await preloadTruffle({
   base: './assets/truffle',
@@ -56,6 +64,11 @@ Then render named styles anywhere:
 ```tsx
 <TruffleCanvasText text="C5: " styleName="u_chat_name" />
 <TruffleCanvasText text="Hello!" styleName="u_chat_speak" />
+<TruffleRichText
+  markup={'Hello <b>rich text</b>'}
+  baseStyle="u_regular"
+  width={320}
+/>
 ```
 
 Chat mappings used by the Habbo-style test:
@@ -72,9 +85,37 @@ and replace it after loading.
 
 ## Styles
 
-Use names from `HABBO_CSS_STYLE_NAMES` or inspect `HABBO_STYLES`. Confirmed
-styles should be treated as read-only presets. Changing their sizes or render
-settings leaves the certified output surface and may look blurry.
+Use names from `HABBO_CSS_STYLE_NAMES` or inspect `HABBO_STYLES`. Named styles
+are read-only presets, not size or face restrictions:
+
+```js
+const style = truffle.resolveStyle('u_regular', {
+  fontSize: 17.5,
+  bold: true,
+  color: 0x17365D,
+});
+```
+
+`fidelity: 'auto'` replays certified glyphs and falls back to deterministic
+outline rendering. Use `'exact'` to reject any calibration miss or
+`'geometric'` to force outline rendering. `onFallback` on
+`loadPackedTruffle(...)` makes this observable in production.
+
+## Editable search and input fields
+
+```js
+import { createTruffleEditable } from 'truffle-text/editable';
+
+const search = createTruffleEditable(document.querySelector('#search'), truffle, {
+  style: { styleName: 'u_italic', size: 11 },
+  placeholder: 'Search profiles...',
+});
+```
+
+This keeps a real transparent textarea for keyboard input, IME, clipboard, and
+accessibility while Truffle draws the text, selection, and caret from one
+layout. Ctrl+A never exposes browser-rendered fallback text. Dynamically added
+underlines have a one-pixel gap by default.
 
 ## Playground
 

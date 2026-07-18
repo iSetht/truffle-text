@@ -30,6 +30,7 @@ export class TextLayout {
     this.font = fonts.get(style.fontFamily, !!style.bold, !!style.italic);
     this._flatCache = new Map();
     this._cCache = new Map();
+    this._stableRasterBoundsCache = new Map();
     // optional calibration: measured FlashType hinted advances (C values)
     // keyed by char, from AIR getCharBoundaries dumps (see tests/build-calibration.mjs)
     this.calibration = style.calibration ?? null;
@@ -50,7 +51,8 @@ export class TextLayout {
       const ch = String.fromCodePoint(cp);
       const { outline, polys } = this._flat(cp);
       const geoC = outline.empty ? floorTwip(outline.advance)
-        : gridFitGlyph(polys, 0, 0, outline.advance, this.style.size, this.fitCfg).advance;
+        : gridFitGlyph(polys, 0, 0, outline.advance, this.style.size, this.fitCfg,
+          null, outline.alignmentZones).advance;
       const e = this.calibration ? this.calibration[ch] : undefined;
       if (e !== undefined) {
         const arr = Array.isArray(e) ? e : [e];
@@ -81,6 +83,17 @@ export class TextLayout {
           inkDxByPrefixContext: arr[14] ?? null,
         };
       } else {
+        if (this.style.fidelity === 'exact' && this.advancedPixel) {
+          throw new Error(`exact advance calibration is unavailable for ${ch} ` +
+            `in ${this.style.fontFamily} ${this.style.size}px`);
+        }
+        this.style._reportFallback?.({
+          stage: 'layout',
+          reason: this.style.fidelity === 'geometric' ? 'geometric-requested' : 'calibration-miss',
+          codePoint: cp,
+          character: ch,
+          signature: `${this.style.fontFamily}|${!!this.style.bold}|${!!this.style.italic}|${this.style.size}`,
+        });
         C = { C: geoC, theta: null, inkShift: 0, inkDy: 0 };
       }
       this._cCache.set(cp, C);
@@ -189,10 +202,42 @@ export class TextLayout {
       adv = this.fittedStep(cp, penX, nextCp, runKey, deepKey, prefixKey).advance;
     } else {
       adv = floorTwip(outline.advance);
+      // Optional non-Habbo mode for bitmap/pixel fonts: keep normal-AA
+      // coverage semantics while preventing fractional phase accumulation on
+      // long strings. The default remains AIR-faithful floor-twip advances.
+      if (this.style.pixelFont === 'snapAdvances' && this.style.fidelity !== 'exact') {
+        adv = Math.max(1, Math.round(adv));
+      }
     }
     if (this.style.kerning && nextCp) adv += roundTwip(this.font.kern(cp, nextCp, this.style.size));
     if (this.style.letterSpacing) adv += this.style.letterSpacing;
     return adv;
+  }
+
+  _stableRasterBounds(cp) {
+    if (this._stableRasterBoundsCache.has(cp)) return this._stableRasterBoundsCache.get(cp);
+    const entry = this.style.rasterCalibration?.[String.fromCodePoint(cp)];
+    if (!entry?.alpha?.length) {
+      this._stableRasterBoundsCache.set(cp, null);
+      return null;
+    }
+    const scan = threshold => {
+      let left = Infinity;
+      let right = -Infinity;
+      for (let y = 0; y < entry.h; y++) for (let x = 0; x < entry.w; x++) {
+        if (entry.alpha[y * entry.w + x] < threshold) continue;
+        left = Math.min(left, x);
+        right = Math.max(right, x);
+      }
+      return Number.isFinite(left)
+        ? { left: entry.x0 + left, right: entry.x0 + right }
+        : null;
+    };
+    const any = scan(1);
+    const strong = scan(192) ?? scan(128) ?? any;
+    const bounds = any && strong ? { any, strong } : null;
+    this._stableRasterBoundsCache.set(cp, bounds);
+    return bounds;
   }
 
   /**
@@ -266,7 +311,37 @@ export class TextLayout {
         const nextCp = nextCpForRun;
         const step = this.advancedPixel
           ? this.fittedStep(cp, penX, nextCp, runKey, deepKey, prefixKey) : { jump: 0, inkShift: 0, calibratedInkShift: 0, inkDy: 0 };
-        line.chars.push({ cp, i: charIndex + k, penX, advance: adv, jump: step.jump, inkShift: step.inkShift, calibratedInkShift: step.calibratedInkShift, inkDy: step.inkDy, runIndex, runLeader, runKey, rasterKey: prefixKey });
+        let autoClipLeft = null;
+        const stableAuto = this.style.fidelity === 'auto' &&
+          this.style.autoRasterPolicy === 'stable' && this.advancedPixel &&
+          !Number.isFinite(wrapW);
+        if (stableAuto && previous && !this._flat(previous.cp).outline.empty &&
+          !this._flat(cp).outline.empty) {
+          const previousBounds = this._stableRasterBounds(previous.cp);
+          const currentBounds = this._stableRasterBounds(cp);
+          if (previousBounds && currentBounds) {
+            const previousOrigin = Math.floor(previous.penX) + (previous.jump ?? 0) +
+              (previous.calibratedInkShift ?? 0);
+            let currentOrigin = Math.floor(penX) + (step.jump ?? 0) +
+              (step.calibratedInkShift ?? 0);
+            let strongGap = currentOrigin + currentBounds.strong.left -
+              (previousOrigin + previousBounds.strong.right);
+            if (strongGap < 2) {
+              const opticalShift = Math.min(3, 2 - strongGap);
+              previous.advance = roundTwip(previous.advance + opticalShift);
+              penX = roundTwip(penX + opticalShift);
+              currentOrigin += opticalShift;
+              strongGap += opticalShift;
+            }
+            const anyGap = currentOrigin + currentBounds.any.left -
+              (previousOrigin + previousBounds.any.right);
+            if (strongGap >= 2 && anyGap < 2) {
+              previous.autoClipRight = previousBounds.strong.right;
+              autoClipLeft = currentBounds.strong.left;
+            }
+          }
+        }
+        line.chars.push({ cp, i: charIndex + k, penX, advance: adv, jump: step.jump, inkShift: step.inkShift, calibratedInkShift: step.calibratedInkShift, inkDy: step.inkDy, runIndex, runLeader, runKey, rasterKey: prefixKey, autoClipLeft });
         penX = roundTwip(penX + adv);
         if (WORD_DELIMS.test(para[k])) lastBreak = line.chars.length - 1;
       }
@@ -319,5 +394,18 @@ export class FontRegistry {
     const f = exact ?? regularWeight ?? legacy;
     if (!f) throw new Error(`font not registered: ${family} bold=${!!bold} italic=${!!italic}`);
     return f;
+  }
+
+  has(family, bold = false, italic = false) {
+    try { return !!this.get(family, bold, italic); }
+    catch { return false; }
+  }
+
+  getExact(family, bold = false, italic = false) {
+    return this.map.get(`${family}|${!!bold}|${!!italic}`) ?? null;
+  }
+
+  families() {
+    return [...new Set([...this.map.keys()].map(key => key.split('|', 1)[0]))];
   }
 }

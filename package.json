@@ -1,7 +1,7 @@
 {
   "name": "truffle-text",
-  "version": "1.0.2",
-  "description": "Exact calibrated HTML canvas text rendering with confirmed Habbo style presets.",
+  "version": "1.0.3",
+  "description": "Scalable deterministic HTML text rendering with certified Flash replay and rich outline rendering.",
   "type": "module",
   "exports": {
     ".": {
@@ -11,6 +11,18 @@
     "./packed": {
       "types": "./src/packed.d.ts",
       "import": "./src/packed.js"
+    },
+    "./richtext": {
+      "types": "./src/richtext/parser.d.ts",
+      "import": "./src/richtext/parser.js"
+    },
+    "./styles": {
+      "types": "./src/styles/catalog.d.ts",
+      "import": "./src/styles/catalog.js"
+    },
+    "./editable": {
+      "types": "./src/editing/editable.d.ts",
+      "import": "./src/editing/editable.js"
     },
     "./react": {
       "types": "./src/react.d.ts",
@@ -52,6 +64,7 @@
     "html",
     "canvas",
     "text-rendering",
+    "rich-text",
     "flashtype",
     "habbo",
     "pixel-perfect"

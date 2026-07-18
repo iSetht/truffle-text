@@ -48,12 +48,20 @@ export function parseTTF(buffer) {
   let os2 = null;
   if (tables['OS/2']) {
     const o = tables['OS/2'].offset;
+    const length = tables['OS/2'].length;
+    const version = u16(o);
     os2 = {
+      version,
       sTypoAscender: i16(o + 68),
       sTypoDescender: i16(o + 70),
       sTypoLineGap: i16(o + 72),
       usWinAscent: u16(o + 74),
       usWinDescent: u16(o + 76),
+      // OS/2 v2 added face-wide alignment metrics. They are the right source
+      // for scalable x-height/cap-height grid fitting; unlike a per-glyph
+      // bounding box they stay stable when a curved glyph overshoots a zone.
+      sxHeight: version >= 2 && length >= 88 ? i16(o + 86) : null,
+      sCapHeight: version >= 2 && length >= 90 ? i16(o + 88) : null,
     };
   }
 

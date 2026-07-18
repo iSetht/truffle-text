@@ -40,6 +40,8 @@ export const DEFAULT_FIT = {
                          // pulled ONTO it — flattens curve tops into the solid
                          // 1px bars AIR produces (measured: 'a' arch = one
                          // crisp row in AIR, smeared over two rows without this)
+  alignmentZoneRange: 0.38, // source overshoot captured by face x/cap/baseline zones
+  diagonalTopOvershoot: 0.35, // diagonal apex coverage beyond its shared top zone
 };
 
 // Raster-only corrections for curved glyphs whose AIR edge density is not
@@ -366,11 +368,51 @@ const STYLE_ALPHA_TUNES = {
 
 export function resolveStyleAlphaTune(style) {
   if (style?.antiAliasType === 'normal' || style?.gridFitType !== 'pixel') return null;
-  return STYLE_ALPHA_TUNES[`${style.fontFamily}|${!!style.bold}|${style.size}`] ?? null;
+  // The measured tables below are upright-only. Applying them to an italic
+  // face merely because family/weight/size match distorts arbitrary italic
+  // sizes (notably Habbo's 11px profile motto override).
+  if (style?.italic) return null;
+  // These tables were measured at Habbo's canonical advanced-AA controls.
+  // Reusing them for a sharpness=0 headline is effectively a hidden second
+  // downscale and produces the grey halo reported on u_headline_small.
+  if ((style.sharpness ?? 0) !== 80 || (style.thickness ?? 0) !== -15) return null;
+  const exact = STYLE_ALPHA_TUNES[`${style.fontFamily}|${!!style.bold}|${style.size}`];
+  if (exact) return exact;
+
+  // Uncertified sizes use a continuous family/weight curve. The certified
+  // sizes above retain their measured constants (and replay masks); between
+  // or beyond those anchors the correction fades smoothly toward neutral as
+  // glyphs get larger and grid-fit density transfer matters less.
+  const anchors = Object.entries(STYLE_ALPHA_TUNES)
+    .map(([key, value]) => {
+      const [family, bold, size] = key.split('|');
+      return { family, bold: bold === 'true', size: Number(size), ...value };
+    })
+    .filter(anchor => anchor.family === style.fontFamily && anchor.bold === !!style.bold)
+    .sort((a, b) => a.size - b.size);
+  if (!anchors.length) return null;
+  const size = Number(style.size);
+  const lower = [...anchors].reverse().find(anchor => anchor.size <= size);
+  const upper = anchors.find(anchor => anchor.size >= size);
+  if (lower && upper && lower !== upper) {
+    const t = (size - lower.size) / (upper.size - lower.size);
+    return {
+      alphaGamma: lower.alphaGamma + (upper.alphaGamma - lower.alphaGamma) * t,
+      alphaScale: lower.alphaScale + (upper.alphaScale - lower.alphaScale) * t,
+    };
+  }
+  const nearest = lower ?? upper;
+  const distance = Math.abs(size - nearest.size);
+  const strength = size > nearest.size ? Math.exp(-distance / 10) : 1;
+  return {
+    alphaGamma: 1 + (nearest.alphaGamma - 1) * strength,
+    alphaScale: 1 + (nearest.alphaScale - 1) * strength,
+  };
 }
 
 export function resolveGlyphProfile(style, codePoint) {
   if (style?.antiAliasType === 'normal' || style?.gridFitType !== 'pixel') return null;
+  if (style?.italic) return null;
   const ch = String.fromCodePoint(codePoint);
   const key = `${style.fontFamily}|${!!style.bold}|${style.size}|${ch}`;
   return GLYPH_PROFILES[key] ?? null;
@@ -500,7 +542,7 @@ export function detectEdges(polys, axis, size, cfg = DEFAULT_FIT) {
  * Snap zone clusters to the grid (FlashType rule, see header).
  * bias: zoneBiasX or zoneBiasY. Returns breakpoints [{from, to}].
  */
-export function snapEdges(clusters, cfg = DEFAULT_FIT, bias = 0, topAnchored = false) {
+export function snapEdges(clusters, cfg = DEFAULT_FIT, bias = 0, topAnchored = false, alignmentZones = null) {
   if (!clusters.length) return [];
   const snapped = [];
   if (topAnchored) {
@@ -510,8 +552,20 @@ export function snapEdges(clusters, cfg = DEFAULT_FIT, bias = 0, topAnchored = f
     // past the line. (Overshoots are part of the raw zone position — arch
     // tops include them, which is why round() lands where AIR does.)
     for (const c of clusters) {
-      const dev = -c.pos;
-      const fit = Math.round(dev + bias) + (c.side === +1 ? (cfg.edgeShift ?? 0) : 0);
+      let source = c.pos;
+      if (alignmentZones) {
+        let nearest = null;
+        for (const zone of Object.values(alignmentZones)) {
+          if (!Number.isFinite(zone)) continue;
+          const distance = Math.abs(c.pos - zone);
+          if (distance <= (cfg.alignmentZoneRange ?? 0.38) &&
+            (!nearest || distance < nearest.distance)) nearest = { zone, distance };
+        }
+        if (nearest) source = nearest.zone;
+      }
+      const dev = -source;
+      const fit = Math.round(dev + bias) + (c.side === +1 ? (cfg.edgeShift ?? 0) : 0) -
+        (c.synthetic && c.side === +1 ? (cfg.diagonalTopOvershoot ?? 0) : 0);
       snapped.push({ from: c.pos, to: -fit });
     }
     snapped.sort((a, b) => a.from - b.from);
@@ -555,6 +609,32 @@ export function snapEdges(clusters, cfg = DEFAULT_FIT, bias = 0, topAnchored = f
   return snapped;
 }
 
+function addAlignmentExtrema(clusters, polys, alignmentZones, cfg) {
+  if (!alignmentZones || !polys.length) return clusters;
+  let minimum = Infinity, maximum = -Infinity;
+  for (const poly of polys) for (const point of poly) {
+    minimum = Math.min(minimum, point.y);
+    maximum = Math.max(maximum, point.y);
+  }
+  const range = cfg.alignmentZoneRange ?? 0.38;
+  const result = clusters.slice();
+  for (const [name, zone] of Object.entries(alignmentZones)) {
+    if (!Number.isFinite(zone)) continue;
+    const baseline = name === 'baseline';
+    const extreme = baseline ? minimum : maximum;
+    const side = baseline ? -1 : +1;
+    if (Math.abs(extreme - zone) > range) continue;
+    if (!result.some(cluster => cluster.side === side && Math.abs(cluster.pos - extreme) <= range)) {
+      // Diagonal extrema (x, v, A) have no near-horizontal run for the normal
+      // detector to accumulate. A synthetic face-zone edge makes their apex
+      // align with flat and curved glyphs without inventing per-glyph hints.
+      result.push({ pos: extreme, extent: Number.MAX_SAFE_INTEGER, side, synthetic: true });
+    }
+  }
+  result.sort((a, b) => a.pos - b.pos);
+  return result;
+}
+
 /**
  * Piecewise-linear warp from breakpoints. Constant shift outside the range.
  * captureRange > 0 adds a PLATEAU around every breakpoint: everything within
@@ -596,7 +676,7 @@ export function makeWarp(snapped, captureRange = 0) {
  * pass 0 for FlashType-faithful phase-independent hinting).
  * Returns { polys: warped polylines (y-up), advance: fitted advance C }.
  */
-export function gridFitGlyph(flatPolys, penX, baselineY, advance, size, cfg = DEFAULT_FIT, profile = null) {
+export function gridFitGlyph(flatPolys, penX, baselineY, advance, size, cfg = DEFAULT_FIT, profile = null, alignmentZones = null) {
   const abs = flatPolys.map(poly => poly.map(p => ({ x: p.x + penX, y: p.y + baselineY })));
   let warpX = (v) => v, warpY = (v) => v;
   let clX = [];
@@ -605,8 +685,15 @@ export function gridFitGlyph(flatPolys, penX, baselineY, advance, size, cfg = DE
     warpX = makeWarp(snapEdges(clX, cfg, cfg.zoneBiasX ?? 0), cfg.captureRange ?? 0);
   }
   if (cfg.snapY) {
-    const clY = detectEdges(abs, 'y', size, cfg);
-    warpY = makeWarp(snapEdges(clY, cfg, cfg.zoneBiasY ?? 0, cfg.yIndependentRound ?? true), cfg.captureRange ?? 0);
+    const yCfg = size * 0.015 > (cfg.alignmentZoneRange ?? 0.38)
+      ? { ...cfg, alignmentZoneRange: size * 0.015 }
+      : cfg;
+    const absoluteZones = alignmentZones && Object.fromEntries(
+      Object.entries(alignmentZones).map(([name, value]) => [name, value + baselineY]),
+    );
+    const clY = addAlignmentExtrema(detectEdges(abs, 'y', size, yCfg), abs, absoluteZones, yCfg);
+    warpY = makeWarp(snapEdges(clY, yCfg, yCfg.zoneBiasY ?? 0,
+      yCfg.yIndependentRound ?? true, absoluteZones), yCfg.captureRange ?? 0);
   }
   const warped = abs.map(poly => poly.map(p => ({ x: warpX(p.x), y: warpY(p.y) })));
   const polys = applyGlyphProfile(warped, profile);

@@ -20,7 +20,7 @@
  */
 
 import {
-  TruffleText, HABBO_STYLES, FlashFont, FontRegistry, FONT_FILES, styleDefaults,
+  TruffleText, FlashFont, FontRegistry, FONT_FILES, resolveStyleProperties,
 } from './index.js';
 
 const F_ALPHA = 1, F_ETCH = 2, F_STATE = 4, F_COVERAGE = 8;
@@ -100,9 +100,7 @@ async function loadJson(url, fetchImpl, fallback) {
 
 /** All manifest signature keys a style could resolve to (mirrors resolveStyle). */
 function styleSignatureCandidates(style) {
-  const named = typeof style === 'string' ? HABBO_STYLES[style] : style;
-  if (!named?.fontFamily) throw new Error(`unknown style: ${style}`);
-  const s = { ...styleDefaults(named.fontFamily), ...named };
+  const s = resolveStyleProperties(style);
   const baseKey = `${s.fontFamily}|${!!s.bold}|${!!s.italic}|${s.size}`;
   const legacyBaseKey = `${s.fontFamily}|${!!s.bold}|${s.size}`;
   const csm = `${s.antiAliasType}|${s.gridFitType}|${s.sharpness}|${s.thickness}`;
@@ -138,7 +136,11 @@ function signaturesForStyles(styles, manifest) {
  *              (null = all signatures)
  *   fetchImpl  optional async (url) => ArrayBuffer override
  */
-export async function loadPackedTruffle({ base = '/dist', styles = null, fetchImpl = null } = {}) {
+export async function loadPackedTruffle({
+  base = '/dist', styles = null, fetchImpl = null,
+  onFallback = null, maxEngines = 128,
+  glyphCacheEntries = 4096, glyphCacheBytes = 32 * 1024 * 1024,
+} = {}) {
   const manifest = await loadJson(`${base}/manifest.json`, fetchImpl);
   if (manifest.format !== 'truffle-dist' || manifest.version !== 1) {
     throw new Error('unsupported dist manifest');
@@ -186,7 +188,8 @@ export async function loadPackedTruffle({ base = '/dist', styles = null, fetchIm
     : Object.keys(manifest.raster));
 
   const truffle = new TruffleText(
-    registry, calibration, rasterCalibration, colorCalibration, compositeCalibration);
+    registry, calibration, rasterCalibration, colorCalibration, compositeCalibration,
+    { onFallback, maxEngines, glyphCacheEntries, glyphCacheBytes });
 
   /** Lazily add raster chunks for more styles, then invalidate cached engines. */
   truffle.ensureStyles = async styleList => {
